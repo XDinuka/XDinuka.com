@@ -1,3 +1,7 @@
+nav {
+  display: inline;
+}
+
 nav h1:first-of-type {
   color: orange;
 }
