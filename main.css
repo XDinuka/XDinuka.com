@@ -1,1 +1,8 @@
-/* No CSS *//*# sourceMappingURL=main.css.map */
+nav h1:first-of-type {
+  color: orange;
+}
+
+nav h1 {
+  color: orangered;
+}
+/*# sourceMappingURL=main.css.map */
