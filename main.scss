@@ -1,11 +1,18 @@
+html, body{
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 0;
+    margin: 0
+}
 nav{
+    
+    padding: 0;
+    margin: 0;
+    background-color: cornflowerblue;
 
-    display: inline;
-
-    h1:first-of-type{
-        color:orange;
+    h1::first-letter{
+        color:orangered;
     }
     h1{
-        color: orangered;
+        color: orchid;
     }
 }
