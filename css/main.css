@@ -5,7 +5,7 @@ body {
   margin: 0;
   height: 100vh;
   width: 100vw;
-  background-color: #000000;
+  background-color: #3b3b3b;
 }
 
 body nav {
@@ -13,30 +13,49 @@ body nav {
   position: sticky;
   padding: 1.2em 1em 1em 1em;
   margin: 0;
-  background: -webkit-gradient(linear, left top, right top, from(#143c85), color-stop(#30eebf), to(rgba(247, 85, 85, 0.945)));
-  background: linear-gradient(to right, #143c85, #30eebf, rgba(247, 85, 85, 0.945));
+  background: -webkit-gradient(linear, left top, right top, from(#143c85), color-stop(#30eebf), to(#f75555));
+  background: linear-gradient(to right, #143c85, #30eebf, #f75555);
 }
 
 body nav p {
   padding: 0;
   margin: 0;
-  color: black;
+  color: #b1b1b1;
   font-size: 2em;
   font-weight: bolder;
 }
 
 body nav p::first-letter {
-  color: #382727;
+  color: #020070;
 }
 
-body section {
-  padding: 2rem;
+body > div {
   display: -ms-grid;
   display: grid;
   place-items: center;
   height: 80vh;
 }
 
-body section h1 {
+body > div div {
   color: #FFFFFF;
+  text-align: center;
+}
+
+body > div div img {
+  height: 10rem;
+  border-radius: 50%;
+}
+
+body > div div a {
+  padding: 1rem;
+  color: #FFFFFF;
+  text-decoration: none;
+  line-height: 2rem;
+}
+
+body > div div a img {
+  margin-right: 0.2rem;
+  height: 2rem;
+  -webkit-transform: translateY(0.5rem);
+          transform: translateY(0.5rem);
 }
