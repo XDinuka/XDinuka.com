@@ -19,7 +19,7 @@ body {
         p {
             padding: 0;
             margin: 0;
-            color: #b1b1b1;
+            color: #ffffff;
             font-size: 2em;
             font-weight: bolder;
         }
@@ -38,19 +38,22 @@ body {
         div {
             color: #FFFFFF;
             text-align: center;
-            img{
+
+            img {
                 height: 10rem;
                 border-radius: 50%;
             }
-            
-            a{
+
+            a {
                 white-space: nowrap;
                 padding: 1rem;
-                img{
-                    margin-right:0.2rem;
+
+                img {
+                    margin-right: 0.2rem;
                     height: 2rem;
                     transform: translateY(0.5rem);
                 }
+
                 color: #FFFFFF;
                 text-decoration: none;
                 line-height: 2rem;
