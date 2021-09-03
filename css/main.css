@@ -47,6 +47,7 @@ body > div div img {
 }
 
 body > div div a {
+  white-space: nowrap;
   padding: 1rem;
   color: #FFFFFF;
   text-decoration: none;
