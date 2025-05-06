@@ -53,7 +53,7 @@
         function loadImages(folderName) {
             gallery.innerHTML = '<div class="text-center">Loading photos...</div>';
 
-            fetch(`uploads/${folderName}/files.json`)
+            fetch(`https://dinuka.izocele.lk/uploads/${folderName}/files.json`)
                 .then(res => res.json())
                 .then(files => {
                     if (!Array.isArray(files) || files.length === 0) {
@@ -66,11 +66,11 @@
                         const col = document.createElement('div');
                         col.className = 'col-6';
                         col.innerHTML = `
-          <a href="uploads/${folderName}/${filename}" target="_blank">
-            <img src="uploads/${folderName}/${filename}" 
+
+            <img src="https://dinuka.izocele.lk/uploads/${folderName}/${filename}" 
                  class="img-fluid rounded shadow-sm mb-3" 
                  alt="${filename}" />
-          </a>
+ 
         `;
 
                         gallery.appendChild(col);
