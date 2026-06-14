@@ -5,52 +5,97 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="css/main.css">
-    <link rel="shortcut icon" href="images/photo.jpeg">
+    <link rel="shortcut icon" href="images/photo.jpg">
 
     <!-- Primary Meta Tags -->
-    <title>Hello, I'm Dinuka</title>
-    <meta name="title" content="Hello, I'm Dinuka">
-    <meta name="description" content="Find my social links on my website.">
+    <title>Dinuka - Software Engineer</title>
+    <meta name="title" content="Dinuka - Software Engineer">
+    <meta name="description" content="Software engineer and app developer. Building useful things, one project at a time.">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://xdinuka.com">
-    <meta property="og:title" content="Hello, I'm Dinuka">
-    <meta property="og:description" content="Find my social links on my website.">
-    <meta property="og:image" content="images/photo/jpeg">
+    <meta property="og:title" content="Dinuka - Software Engineer">
+    <meta property="og:description" content="Software engineer and app developer. Building useful things, one project at a time.">
+    <meta property="og:image" content="images/photo.jpg">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://xdinuka.com">
-    <meta property="twitter:title" content="Hello, I'm Dinuka">
-    <meta property="twitter:description" content="Find my social links on my website.">
-    <meta property="twitter:image" content="images/photo/jpeg">
+    <meta property="twitter:title" content="Dinuka - Software Engineer">
+    <meta property="twitter:description" content="Software engineer and app developer. Building useful things, one project at a time.">
+    <meta property="twitter:image" content="images/photo.jpg">
 </head>
 
 <body>
-    <nav>
+    <nav id="top">
         <p>XDinuka</p>
     </nav>
-    <div>
-        <div>
-            <img src="images/photo.jpg">
+
+    <section id="hero">
+        <div class="hero-inner">
+            <img src="images/photo.jpg" alt="Dinuka" class="profile-photo">
             <h1>Hello, I'm Dinuka</h1>
+            <p class="tagline">Software engineer &amp; app developer.<br>Building useful things, one project at a time.</p>
 
-            <h2>Find me on</h2>
-            <div>
-                <a href="https://www.facebook.com/XDinuka" target="_blank"><img src="images/facebook.svg" />Facebook</a>
-                <a href="https://twitter.com/XDinuka" target="_blank"><img src="images/twitter.svg" />Twitter</a>
-                <a href="https://www.instagram.com/xdinuka" target="_blank"><img
-                        src="images/instagram.svg" />Instagram</a>
-                <a href="https://github.com/XDinuka" target="_blank"><img src="images/github.svg" />GitHub</a>
-                <a href="https://www.linkedin.com/in/xdinuka" target="_blank"><img
-                        src="images/linkedin.svg" />LinkedIn</a>
+            <div class="social-links">
+                <a href="https://www.facebook.com/XDinuka" target="_blank">
+                    <img src="images/facebook.svg" alt="Facebook"> Facebook
+                </a>
+                <a href="https://twitter.com/XDinuka" target="_blank">
+                    <img src="images/twitter.svg" alt="Twitter"> Twitter
+                </a>
+                <a href="https://www.instagram.com/xdinuka" target="_blank">
+                    <img src="images/instagram.svg" alt="Instagram"> Instagram
+                </a>
+                <a href="https://github.com/XDinuka" target="_blank">
+                    <img src="images/github.svg" alt="GitHub"> GitHub
+                </a>
+                <a href="https://www.linkedin.com/in/xdinuka" target="_blank">
+                    <img src="images/linkedin.svg" alt="LinkedIn"> LinkedIn
+                </a>
             </div>
-            <a href="mailto:dinuka@xdinuka.com">dinuka@xdinuka.com</a>
 
+            <a href="mailto:dinuka@xdinuka.com" class="email-link">dinuka@xdinuka.com</a>
         </div>
-    </div>
+    </section>
+
+    <section id="projects">
+        <div class="section-header">
+            <h2>Projects</h2>
+            <p>Things I've built and shipped</p>
+        </div>
+
+        <div class="projects-grid">
+            <div class="project-card">
+                <img src="images/kosalli-icon.webp" alt="KoSalli icon" class="project-icon">
+                <div class="project-info">
+                    <h3>KoSalli</h3>
+                    <div class="project-tags">
+                        <span class="tag android">Android</span>
+                        <span class="tag beta">Public Beta</span>
+                    </div>
+                    <p class="project-description">
+                        Personal finance manager for Sri Lankans. Aggregates spending data from bank SMS notifications so you always know where your money went.
+                    </p>
+                    <div class="project-links">
+                        <a href="https://play.google.com/store/apps/details?id=com.xdinuka.kosalli" target="_blank" class="btn-primary">
+                            Get on Google Play
+                        </a>
+                        <a href="apps/KoSalli/" class="btn-ghost">Learn more</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2024 Dinuka. All rights reserved.</p>
+    </footer>
 </body>
 
 </html>
