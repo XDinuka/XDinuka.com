@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/family-tree.css">
+    <title>Family Tree</title>
+</head>
+
+<body>
+    <nav>
+        <p>Family Tree</p>
+    </nav>
+
+    <main>
+        <div id="tree-loading" class="tree-status">Loading family tree…</div>
+        <div id="tree-error" class="tree-status" hidden>
+            <p>Could not load the family tree.</p>
+            <button id="retry-btn" class="ft-btn-primary">Retry</button>
+        </div>
+        <div id="tree-root"></div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Dinuka &mdash; Private family tree, not publicly indexed.</p>
+    </footer>
+
+    <!-- PIN authentication modal -->
+    <div id="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box">
+            <button class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="auth-title">Verify Identity</h2>
+            <p id="auth-modal-name" class="modal-subtitle"></p>
+            <label class="ft-label">
+                PIN
+                <input type="password" id="pin-input" inputmode="numeric" maxlength="8"
+                    placeholder="Enter your PIN" autocomplete="off">
+            </label>
+            <p id="auth-error" class="form-error" hidden>Incorrect PIN. Please try again.</p>
+            <button id="auth-submit" class="ft-btn-primary ft-btn-full">Unlock</button>
+        </div>
+    </div>
+
+    <!-- Edit / add-member modal -->
+    <div id="edit-modal" hidden role="dialog" aria-modal="true" aria-labelledby="edit-title">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box">
+            <button class="modal-close" aria-label="Close">&times;</button>
+            <h2 id="edit-title">Your Info</h2>
+
+            <form id="edit-form" novalidate>
+                <label class="ft-label">Name <input name="full_name"></label>
+                <label class="ft-label">Date of birth <input type="date" name="dob"></label>
+                <label class="ft-label">Date of death <input type="date" name="dod"></label>
+                <label class="ft-label">Note <textarea name="note" rows="3"></textarea></label>
+                <label class="ft-label">
+                    Photo
+                    <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
+                    <span class="field-hint">JPEG, PNG or WebP &mdash; max 5 MB</span>
+                </label>
+                <p id="edit-status" class="form-status" hidden></p>
+                <div class="form-actions">
+                    <button type="submit" class="ft-btn-primary">Save</button>
+                </div>
+            </form>
+
+            <hr class="modal-divider">
+            <h3>Add family member</h3>
+
+            <div class="add-tabs">
+                <button class="tab-btn active" data-tab="child">Add Child</button>
+                <button class="tab-btn" data-tab="partner">Add Partner</button>
+            </div>
+
+            <form id="add-member-form" novalidate>
+                <input type="hidden" name="member_type" value="child">
+                <label class="ft-label">Name <input name="full_name" required></label>
+                <label class="ft-label">Date of birth <input type="date" name="dob"></label>
+                <label class="ft-label">Note <textarea name="note" rows="2"></textarea></label>
+                <label class="ft-label">
+                    Relationship type
+                    <select id="rel-subtype" name="rel_subtype">
+                        <option value="">Biological (default)</option>
+                        <option value="adoptive">Adoptive</option>
+                        <option value="step">Step</option>
+                        <option value="foster">Foster</option>
+                    </select>
+                </label>
+                <label class="ft-label">
+                    Their PIN
+                    <input type="password" name="pin" inputmode="numeric" maxlength="8"
+                        required autocomplete="off">
+                    <span class="field-hint">They'll use this to edit their own info later</span>
+                </label>
+                <p id="add-status" class="form-status" hidden></p>
+                <div class="form-actions">
+                    <button type="submit" class="ft-btn-primary">Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Unconfirmed person notice -->
+    <div id="unconfirmed-notice" hidden role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box modal-box--narrow">
+            <button class="modal-close" aria-label="Close">&times;</button>
+            <p class="notice-icon" aria-hidden="true">⏳</p>
+            <h2>Pending Verification</h2>
+            <p><strong id="unconfirmed-notice-name"></strong> has been added to the family tree.</p>
+            <p class="text-muted">This entry will be reviewed and confirmed by Dinuka before it's finalised.</p>
+        </div>
+    </div>
+
+    <!-- Additions disabled notice -->
+    <div id="additions-disabled-notice" hidden role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box modal-box--narrow">
+            <button class="modal-close" aria-label="Close">&times;</button>
+            <p class="notice-icon" aria-hidden="true">🔒</p>
+            <h2>Additions Paused</h2>
+            <p class="text-muted">New additions to the family tree are temporarily paused. Please check back later.</p>
+        </div>
+    </div>
+
+    <script type="module" src="family-tree.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,456 @@
+// Family tree page — compiled to css/family-tree.css
+// Inherits CSS variables from main.css (:root block)
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+main {
+    min-height: calc(100vh - 120px);
+    padding-bottom: 3rem;
+}
+
+#tree-root {
+    position: relative;
+    padding: 2.5rem 1rem 4rem;
+    overflow-x: auto;
+}
+
+.gen-row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.5rem 2.5rem;
+    margin-bottom: 4.5rem;
+    position: relative;
+}
+
+.family-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.couple-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+// ── Person card ───────────────────────────────────────────────────────────────
+
+.person-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 120px;
+
+    &.unconfirmed {
+        opacity: 0.75;
+    }
+}
+
+.person-photo-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    display: block;
+    transition: transform var(--transition), box-shadow var(--transition);
+
+    &:hover,
+    &:focus-visible {
+        transform: scale(1.08);
+        box-shadow:
+            0 0 0 3px var(--bg),
+            0 0 0 6px var(--grad-mid);
+        outline: none;
+    }
+}
+
+.person-photo,
+.person-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    box-shadow:
+        0 0 0 3px var(--bg),
+        0 0 0 5px rgba(48, 238, 191, 0.35);
+}
+
+.person-name {
+    margin: 0.5rem 0 0.15rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.person-dates {
+    margin: 0 0 0.15rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.person-note {
+    margin: 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    max-width: 110px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.unconfirmed-badge {
+    display: inline-block;
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    background: rgba(247, 85, 85, 0.18);
+    border: 1px solid rgba(247, 85, 85, 0.35);
+    border-radius: 999px;
+    color: var(--grad-end);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+// ── Couple connector ──────────────────────────────────────────────────────────
+
+.couple-connector {
+    align-self: center;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-top: 0.5rem; // align with top of photo
+    cursor: default;
+
+    &.connector-active {
+        color: var(--grad-end);
+    }
+
+    &.connector-ex {
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 0.9rem;
+    }
+
+    &.connector-unconfirmed {
+        opacity: 0.5;
+    }
+}
+
+// ── Expand button ─────────────────────────────────────────────────────────────
+
+.expand-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    color: var(--grad-mid);
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.2rem 0.75rem;
+    cursor: pointer;
+    transition: background var(--transition);
+
+    &:hover {
+        background: var(--surface-hover);
+    }
+
+    .expand-icon {
+        display: inline-block;
+        transition: transform var(--transition);
+    }
+
+    &[aria-expanded="false"] .expand-icon {
+        transform: rotate(-90deg);
+    }
+
+    .expand-label {
+        color: var(--text-muted);
+    }
+}
+
+// ── SVG connector overlay ─────────────────────────────────────────────────────
+
+#connector-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
+// ── Tree state messages ───────────────────────────────────────────────────────
+
+.tree-status {
+    text-align: center;
+    padding: 5rem 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.tree-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 4rem 1.5rem;
+}
+
+// ── Modals ────────────────────────────────────────────────────────────────────
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 200;
+}
+
+.modal-box {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 201;
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 2rem;
+    width: min(480px, calc(100vw - 2rem));
+    max-height: 90vh;
+    overflow-y: auto;
+
+    h2 {
+        margin: 0 0 1.25rem;
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+
+    h3 {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    &.modal-box--narrow {
+        width: min(360px, calc(100vw - 2rem));
+        text-align: center;
+    }
+}
+
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.25rem;
+
+    &:hover {
+        color: var(--text);
+    }
+}
+
+.modal-subtitle {
+    margin: -0.5rem 0 1.25rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.modal-divider {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 1.75rem 0 1.5rem;
+}
+
+.notice-icon {
+    font-size: 2rem;
+    margin: 0 0 0.75rem;
+}
+
+// ── Form elements ─────────────────────────────────────────────────────────────
+
+.ft-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+
+    input,
+    textarea,
+    select {
+        background: var(--bg);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.5rem;
+        color: var(--text);
+        padding: 0.6rem 0.85rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+        width: 100%;
+        transition: border-color var(--transition);
+
+        &:focus {
+            outline: none;
+            border-color: var(--grad-mid);
+        }
+    }
+
+    textarea {
+        resize: vertical;
+        min-height: 72px;
+    }
+
+    input[type="file"] {
+        padding: 0.4rem 0;
+        background: transparent;
+        border-color: transparent;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+}
+
+.field-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.form-error {
+    margin: 0 0 1rem;
+    font-size: 0.82rem;
+    color: var(--grad-end);
+}
+
+.form-status {
+    margin: 0 0 0.75rem;
+    font-size: 0.82rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.4rem;
+
+    &.form-status--ok {
+        background: rgba(48, 238, 191, 0.12);
+        color: var(--grad-mid);
+        border: 1px solid rgba(48, 238, 191, 0.25);
+    }
+
+    &.form-status--err {
+        background: rgba(247, 85, 85, 0.12);
+        color: var(--grad-end);
+        border: 1px solid rgba(247, 85, 85, 0.25);
+    }
+}
+
+.form-actions {
+    margin-top: 0.5rem;
+}
+
+// ── Tab buttons ───────────────────────────────────────────────────────────────
+
+.add-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.tab-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.5rem;
+    color: var(--text-muted);
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+
+    &.active {
+        background: var(--grad-start);
+        color: var(--text);
+        border-color: transparent;
+    }
+
+    &:not(.active):hover {
+        background: var(--surface-hover);
+        color: var(--text);
+    }
+}
+
+// ── Primary button ────────────────────────────────────────────────────────────
+
+.ft-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.6rem 1.4rem;
+    background: linear-gradient(to right, var(--grad-start), var(--grad-mid));
+    color: #ffffff;
+    border: none;
+    border-radius: 0.6rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity var(--transition), transform var(--transition);
+    min-height: 40px;
+
+    &:hover:not(:disabled) {
+        opacity: 0.88;
+        transform: translateY(-1px);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    &.ft-btn-full {
+        width: 100%;
+        margin-top: 0.25rem;
+    }
+}
+
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@media (max-width: 480px) {
+    .gen-row {
+        gap: 1rem 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .person-card {
+        width: 90px;
+    }
+
+    .person-photo,
+    .person-avatar {
+        width: 64px;
+        height: 64px;
+    }
+
+    .modal-box {
+        padding: 1.5rem;
+    }
+}
