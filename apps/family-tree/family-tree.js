@@ -1,534 +1,9 @@
-import { getToken, openAuthModal, API_BASE } from './auth.js';
+import { getEditToken, clearEditToken, isUnlocked, unlockWithPin, API_BASE } from './auth.js';
 
-let treeData      = { allow_additions: true, people: [], relationships: [] };
-let allowAdditions = true;
-const collapsedNodes = new Set();
-
-// Indexes rebuilt after every data change
-let peopleById    = new Map(); // id → person
-let activePartner = new Map(); // person_id → { partnerId, rel }
-let allCoupleRels = new Map(); // person_id → [{ partnerId, rel }]
-let childrenOf    = new Map(); // parent_id → [{ childId, rel }]
-
-document.addEventListener('DOMContentLoaded', () => {
-  loadTree();
-  document.getElementById('retry-btn')?.addEventListener('click', loadTree);
-  window.addEventListener('resize', debounce(drawConnectors, 150));
-});
-
-async function loadTree() {
-  show('tree-loading');
-  hide('tree-error');
-  document.getElementById('tree-root').innerHTML = '';
-
-  try {
-    const res = await fetch(`${API_BASE}/tree`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    treeData = await res.json();
-    allowAdditions = treeData.allow_additions !== false;
-    buildIndexes();
-    hide('tree-loading');
-    renderTree();
-  } catch {
-    hide('tree-loading');
-    show('tree-error');
-  }
-}
-
-function buildIndexes() {
-  peopleById    = new Map(treeData.people.map(p => [p.id, p]));
-  activePartner = new Map();
-  allCoupleRels = new Map();
-  childrenOf    = new Map();
-
-  for (const rel of treeData.relationships) {
-    if (rel.rel_type === 'couple') {
-      for (const [a, b] of [[rel.person_a_id, rel.person_b_id], [rel.person_b_id, rel.person_a_id]]) {
-        if (!allCoupleRels.has(a)) allCoupleRels.set(a, []);
-        allCoupleRels.get(a).push({ partnerId: b, rel });
-
-        if (isActiveCouple(rel) && !activePartner.has(a)) {
-          activePartner.set(a, { partnerId: b, rel });
-        }
-      }
-    }
-
-    if (rel.rel_type === 'parent_child') {
-      if (!childrenOf.has(rel.person_a_id)) childrenOf.set(rel.person_a_id, []);
-      childrenOf.get(rel.person_a_id).push({ childId: rel.person_b_id, rel });
-    }
-  }
-}
+// ─── Pure helpers (no Vue instance state needed) ───────────────────────────────
 
 function isActiveCouple(rel) {
-  return !rel.rel_subtype || rel.rel_subtype === 'married' || rel.rel_subtype === 'partner';
-}
-
-// ─── Rendering ────────────────────────────────────────────────────────────────
-
-function renderTree() {
-  const root = document.getElementById('tree-root');
-  root.innerHTML = '';
-
-  if (!treeData.people.length) {
-    root.innerHTML = '<p class="tree-empty">No family members yet.</p>';
-    return;
-  }
-
-  const generations = [...new Set(treeData.people.map(p => p.generation))].sort((a, b) => a - b);
-
-  for (const gen of generations) {
-    const row = document.createElement('div');
-    row.className = 'gen-row';
-    row.dataset.generation = gen;
-
-    const placed = new Set();
-    const genPeople = treeData.people.filter(p => p.generation === gen);
-
-    for (const person of genPeople) {
-      if (placed.has(person.id)) continue;
-      placed.add(person.id);
-
-      const ap = activePartner.get(person.id);
-      const partner = ap && !placed.has(ap.partnerId) && peopleById.get(ap.partnerId)?.generation === gen
-        ? peopleById.get(ap.partnerId)
-        : null;
-
-      if (partner) placed.add(partner.id);
-
-      row.appendChild(buildUnit(person, partner, ap?.rel ?? null));
-    }
-
-    root.appendChild(row);
-  }
-
-  // Restore collapsed state after re-render
-  for (const parentId of collapsedNodes) {
-    const descendants = getDescendants(parentId, activePartner.get(parentId)?.partnerId);
-    for (const id of descendants) {
-      const unit = document.querySelector(`.person-card[data-person-id="${id}"]`)?.closest('.family-unit');
-      if (unit) unit.hidden = true;
-    }
-    const btn = document.querySelector(`.expand-btn[data-parent-id="${parentId}"]`);
-    if (btn) btn.setAttribute('aria-expanded', 'false');
-  }
-
-  drawConnectors();
-}
-
-function buildUnit(primary, partner, coupleRel) {
-  const unit = document.createElement('div');
-  unit.className = 'family-unit';
-
-  const coupleRow = document.createElement('div');
-  coupleRow.className = 'couple-row';
-  coupleRow.appendChild(buildCard(primary));
-
-  if (partner) {
-    const conn = document.createElement('span');
-    conn.className = 'couple-connector';
-    conn.setAttribute('aria-hidden', 'true');
-    conn.title = getCoupleLabel(coupleRel);
-
-    const active = isActiveCouple(coupleRel);
-    conn.textContent = active ? '♥' : '✕';
-    conn.classList.add(active ? 'connector-active' : 'connector-ex');
-    if (!coupleRel.confirmed) conn.classList.add('connector-unconfirmed');
-
-    coupleRow.appendChild(conn);
-    coupleRow.appendChild(buildCard(partner));
-  }
-
-  unit.appendChild(coupleRow);
-
-  // Combine children from both parents to determine if expand button is needed
-  const myKids      = childrenOf.get(primary.id) ?? [];
-  const partnerKids = partner ? (childrenOf.get(partner.id) ?? []) : [];
-  const childIds    = new Set([...myKids.map(c => c.childId), ...partnerKids.map(c => c.childId)]);
-
-  if (childIds.size > 0) {
-    const btn = document.createElement('button');
-    btn.className = 'expand-btn';
-    btn.dataset.parentId = primary.id;
-    btn.setAttribute('aria-expanded', 'true');
-    btn.innerHTML = `<span class="expand-icon">▾</span><span class="expand-label"> ${childIds.size} ${childIds.size === 1 ? 'child' : 'children'}</span>`;
-    btn.addEventListener('click', () => toggleSubtree(primary.id, partner?.id));
-    unit.appendChild(btn);
-  }
-
-  return unit;
-}
-
-function buildCard(person) {
-  const card = document.createElement('div');
-  card.className = 'person-card' + (person.confirmed ? '' : ' unconfirmed');
-  card.dataset.personId = person.id;
-
-  const btn = document.createElement('button');
-  btn.className = 'person-photo-btn';
-  btn.setAttribute('aria-label', `${person.confirmed ? 'Edit' : 'View'} ${person.full_name}`);
-
-  if (person.photo_id) {
-    const img = document.createElement('img');
-    img.className = 'person-photo';
-    img.alt = person.full_name;
-    img.src = `photos/${person.photo_id}.webp`;
-    img.onerror = function () {
-      this.onerror = null;
-      this.src = `${API_BASE}/photos/${person.photo_id}`;
-    };
-    btn.appendChild(img);
-  } else {
-    btn.appendChild(buildAvatar(person.full_name));
-  }
-
-  btn.addEventListener('click', () => {
-    if (!person.confirmed) {
-      openSimpleModal('unconfirmed-notice', el => {
-        el.querySelector('#unconfirmed-notice-name').textContent = person.full_name;
-      });
-      return;
-    }
-    openAuthModal(person, token => openEditModal(person, token));
-  });
-
-  card.appendChild(btn);
-
-  const name = el('p', 'person-name', person.full_name);
-  card.appendChild(name);
-
-  if (person.dob || person.dod) {
-    card.appendChild(el('p', 'person-dates', formatDates(person.dob, person.dod)));
-  }
-
-  if (person.note) {
-    const note = el('p', 'person-note', person.note);
-    note.title = person.note;
-    card.appendChild(note);
-  }
-
-  if (!person.confirmed) {
-    card.appendChild(el('span', 'unconfirmed-badge', 'Pending'));
-  }
-
-  return card;
-}
-
-function buildAvatar(name) {
-  const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  const svg = svgEl('svg');
-  svg.setAttribute('viewBox', '0 0 80 80');
-  svg.setAttribute('width', '80');
-  svg.setAttribute('height', '80');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('person-photo', 'person-avatar');
-
-  const circle = svgEl('circle');
-  circle.setAttribute('cx', '40'); circle.setAttribute('cy', '40');
-  circle.setAttribute('r', '40'); circle.setAttribute('fill', '#2e2e50');
-
-  const text = svgEl('text');
-  text.setAttribute('x', '50%'); text.setAttribute('y', '50%');
-  text.setAttribute('text-anchor', 'middle');
-  text.setAttribute('dominant-baseline', 'central');
-  text.setAttribute('fill', '#30eebf');
-  text.setAttribute('font-size', '28');
-  text.setAttribute('font-family', 'Inter, sans-serif');
-  text.setAttribute('font-weight', '600');
-  text.textContent = initials;
-
-  svg.appendChild(circle);
-  svg.appendChild(text);
-  return svg;
-}
-
-// ─── SVG connector lines ──────────────────────────────────────────────────────
-
-function drawConnectors() {
-  document.getElementById('connector-svg')?.remove();
-
-  const rootEl   = document.getElementById('tree-root');
-  const rootRect = rootEl.getBoundingClientRect();
-
-  const svg = svgEl('svg');
-  svg.id = 'connector-svg';
-  svg.setAttribute('aria-hidden', 'true');
-
-  for (const rel of treeData.relationships) {
-    if (rel.rel_type !== 'parent_child') continue;
-    if (collapsedNodes.has(rel.person_a_id)) continue;
-
-    const parentCard = document.querySelector(`.person-card[data-person-id="${rel.person_a_id}"]`);
-    const childCard  = document.querySelector(`.person-card[data-person-id="${rel.person_b_id}"]`);
-    if (!parentCard || !childCard) continue;
-
-    const pRect = parentCard.getBoundingClientRect();
-    const cRect = childCard.getBoundingClientRect();
-
-    const x1   = pRect.left + pRect.width  / 2 - rootRect.left;
-    const y1   = pRect.bottom - rootRect.top;
-    const x2   = cRect.left  + cRect.width  / 2 - rootRect.left;
-    const y2   = cRect.top   - rootRect.top;
-    const midY = (y1 + y2) / 2;
-
-    const path = svgEl('path');
-    path.setAttribute('d', `M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`);
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-width', '2');
-    path.setAttribute('stroke', rel.confirmed ? 'rgba(48,238,191,0.4)' : 'rgba(255,255,255,0.2)');
-
-    const isBio = !rel.rel_subtype || rel.rel_subtype === 'biological';
-    if (!isBio) path.setAttribute('stroke-dasharray', '6,4');
-
-    svg.appendChild(path);
-  }
-
-  rootEl.appendChild(svg);
-}
-
-// ─── Expand / collapse ────────────────────────────────────────────────────────
-
-function toggleSubtree(primaryId, partnerId) {
-  const nowCollapsing = !collapsedNodes.has(primaryId);
-  nowCollapsing ? collapsedNodes.add(primaryId) : collapsedNodes.delete(primaryId);
-
-  const descendants = getDescendants(primaryId, partnerId);
-  for (const id of descendants) {
-    const unit = document.querySelector(`.person-card[data-person-id="${id}"]`)?.closest('.family-unit');
-    if (unit) unit.hidden = nowCollapsing;
-  }
-
-  const btn = document.querySelector(`.expand-btn[data-parent-id="${primaryId}"]`);
-  if (btn) btn.setAttribute('aria-expanded', String(!nowCollapsing));
-
-  drawConnectors();
-}
-
-function getDescendants(primaryId, partnerId) {
-  const result = new Set();
-  const queue  = [];
-
-  const enqueue = (parentId) => {
-    for (const { childId } of childrenOf.get(parentId) ?? []) {
-      if (result.has(childId)) continue;
-      result.add(childId);
-      queue.push(childId);
-      const ap = activePartner.get(childId);
-      if (ap) result.add(ap.partnerId);
-    }
-  };
-
-  enqueue(primaryId);
-  if (partnerId) enqueue(partnerId);
-
-  while (queue.length) {
-    const id = queue.shift();
-    enqueue(id);
-    const ap = activePartner.get(id);
-    if (ap) enqueue(ap.partnerId);
-  }
-
-  return result;
-}
-
-// ─── Edit modal ───────────────────────────────────────────────────────────────
-
-function openEditModal(person, token) {
-  if (!allowAdditions) {
-    openSimpleModal('additions-disabled-notice');
-    return;
-  }
-
-  const modal      = document.getElementById('edit-modal');
-  const editForm   = document.getElementById('edit-form');
-  const addForm    = document.getElementById('add-member-form');
-  const editStatus = document.getElementById('edit-status');
-  const addStatus  = document.getElementById('add-status');
-
-  editForm.elements.full_name.value = person.full_name;
-  editForm.elements.dob.value       = person.dob  ?? '';
-  editForm.elements.dod.value       = person.dod  ?? '';
-  editForm.elements.note.value      = person.note ?? '';
-  editStatus.hidden = true;
-
-  addForm.reset();
-  addForm.elements.member_type.value = 'child';
-  addStatus.hidden = true;
-  switchTab('child');
-
-  modal.hidden = false;
-  editForm.querySelector('[type="submit"]').focus();
-
-  const closeBtn = modal.querySelector('.modal-close');
-  const backdrop = modal.querySelector('.modal-backdrop');
-
-  function hideModal() {
-    modal.hidden = true;
-    editForm.onsubmit = null;
-    addForm.onsubmit  = null;
-    closeBtn.removeEventListener('click', hideModal);
-    backdrop.removeEventListener('click', hideModal);
-  }
-
-  closeBtn.addEventListener('click', hideModal);
-  backdrop.addEventListener('click', hideModal);
-
-  modal.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.onclick = () => {
-      const tab = btn.dataset.tab;
-      addForm.elements.member_type.value = tab;
-      switchTab(tab);
-    };
-  });
-
-  editForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const submitBtn = editForm.querySelector('[type="submit"]');
-    setWorking(submitBtn, 'Saving…');
-    editStatus.hidden = true;
-
-    try {
-      const body = {
-        full_name: editForm.elements.full_name.value.trim(),
-        dob:  editForm.elements.dob.value  || null,
-        dod:  editForm.elements.dod.value  || null,
-        note: editForm.elements.note.value.trim() || null,
-      };
-
-      const res = await fetch(`${API_BASE}/people/${person.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error();
-      const { person: updated } = await res.json();
-      Object.assign(person, updated);
-
-      const photoFile = editForm.elements.photo.files[0];
-      if (photoFile) {
-        const fd = new FormData();
-        fd.append('photo', photoFile);
-        const pr = await fetch(`${API_BASE}/people/${person.id}/photo`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: fd,
-        });
-        if (pr.ok) {
-          const { photo_id } = await pr.json();
-          person.photo_id = photo_id;
-        }
-      }
-
-      renderTree();
-      editStatus.textContent = 'Saved!';
-      editStatus.className = 'form-status form-status--ok';
-      editStatus.hidden = false;
-    } catch {
-      editStatus.textContent = 'Save failed. Please try again.';
-      editStatus.className = 'form-status form-status--err';
-      editStatus.hidden = false;
-    } finally {
-      setWorking(submitBtn, 'Save', false);
-    }
-  };
-
-  addForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const submitBtn  = addForm.querySelector('[type="submit"]');
-    const memberType = addForm.elements.member_type.value;
-    setWorking(submitBtn, 'Adding…');
-    addStatus.hidden = true;
-
-    try {
-      const body = {
-        full_name:   addForm.elements.full_name.value.trim(),
-        dob:         addForm.elements.dob.value || null,
-        note:        addForm.elements.note.value.trim() || null,
-        pin:         addForm.elements.pin.value,
-        rel_subtype: addForm.elements.rel_subtype.value || null,
-      };
-
-      const endpoint = memberType === 'child'
-        ? `${API_BASE}/people/${person.id}/children`
-        : `${API_BASE}/people/${person.id}/partner`;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
-        throw new Error(error || 'Failed');
-      }
-
-      const data = await res.json();
-      treeData.people.push(data.person);
-      treeData.relationships.push(data.relationship);
-      buildIndexes();
-      renderTree();
-
-      addForm.reset();
-      switchTab(memberType);
-      addStatus.textContent = `${data.person.full_name} added — awaiting verification.`;
-      addStatus.className = 'form-status form-status--ok';
-      addStatus.hidden = false;
-    } catch (err) {
-      addStatus.textContent = err.message || 'Failed to add. Please try again.';
-      addStatus.className = 'form-status form-status--err';
-      addStatus.hidden = false;
-    } finally {
-      setWorking(submitBtn, 'Add', false);
-    }
-  };
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('#edit-modal .tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-
-  const select = document.getElementById('rel-subtype');
-  select.innerHTML = '';
-
-  const options = tab === 'child'
-    ? [['', 'Biological (default)'], ['adoptive', 'Adoptive'], ['step', 'Step'], ['foster', 'Foster']]
-    : [['', 'Married (default)'], ['partner', 'Partner'], ['ex', 'Ex-partner'], ['divorced', 'Divorced'], ['separated', 'Separated']];
-
-  for (const [value, label] of options) {
-    const opt = document.createElement('option');
-    opt.value   = value;
-    opt.textContent = label;
-    select.appendChild(opt);
-  }
-}
-
-// ─── Simple notice modals ─────────────────────────────────────────────────────
-
-function openSimpleModal(id, setup) {
-  const modal    = document.getElementById(id);
-  const closeBtn = modal.querySelector('.modal-close');
-  const backdrop = modal.querySelector('.modal-backdrop');
-
-  setup?.(modal);
-  modal.hidden = false;
-
-  function hide() {
-    modal.hidden = true;
-    closeBtn.removeEventListener('click', hide);
-    backdrop.removeEventListener('click', hide);
-  }
-
-  closeBtn.addEventListener('click', hide);
-  backdrop.addEventListener('click', hide);
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDates(dob, dod) {
-  const birth = dob ? new Date(dob).getUTCFullYear() : '?';
-  return dod ? `${birth} – ${new Date(dod).getUTCFullYear()}` : `b. ${birth}`;
+  return !rel || !rel.rel_subtype || rel.rel_subtype === 'married' || rel.rel_subtype === 'partner';
 }
 
 function getCoupleLabel(rel) {
@@ -536,26 +11,635 @@ function getCoupleLabel(rel) {
   return labels[rel?.rel_subtype] ?? 'Couple';
 }
 
-function el(tag, className, text) {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
+function formatDates(dob, dod) {
+  const birth = dob ? new Date(dob).getUTCFullYear() : '?';
+  return dod ? `${birth} – ${new Date(dod).getUTCFullYear()}` : `b. ${birth}`;
+}
+
+function avg(nums) {
+  return nums.reduce((sum, n) => sum + n, 0) / nums.length;
 }
 
 function svgEl(tag) {
   return document.createElementNS('http://www.w3.org/2000/svg', tag);
 }
 
-function show(id) { document.getElementById(id).hidden = false; }
-function hide(id) { document.getElementById(id).hidden = true; }
+function basePath(d, stroke, dashed) {
+  const path = svgEl('path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke-width', '2');
+  path.setAttribute('stroke', stroke);
+  if (dashed) path.setAttribute('stroke-dasharray', '6,4');
+  return path;
+}
 
-function setWorking(btn, label, disabled = true) {
-  btn.disabled    = disabled;
-  btn.textContent = label;
+// Trunk/bus routing lines — neutral regardless of the underlying relationship's confirmed state.
+function neutralPath(d, dashed) {
+  return basePath(d, 'rgba(255,255,255,0.25)', dashed);
+}
+
+// Per-child riser — styled like the relationship it represents (confirmed color, subtype dash).
+function relPath(d, rel) {
+  const isBio = !rel.rel_subtype || rel.rel_subtype === 'biological';
+  return basePath(d, rel.confirmed ? 'rgba(48,238,191,0.4)' : 'rgba(255,255,255,0.2)', !isBio);
 }
 
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
+
+// ─── person-card component ─────────────────────────────────────────────────────
+
+const PersonCard = {
+  template: '#person-card-template',
+  props: { person: { type: Object, required: true } },
+  emits: ['open'],
+  computed: {
+    initials() {
+      return this.person.full_name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    },
+    formattedDates() {
+      return formatDates(this.person.dob, this.person.dod);
+    },
+    photoSrc() {
+      return `photos/${this.person.photo_id}.webp`;
+    },
+  },
+  methods: {
+    onImgError(e) {
+      e.target.onerror = null;
+      e.target.src = `${API_BASE}/photos/${this.person.photo_id}`;
+    },
+  },
+};
+
+// ─── Main app ───────────────────────────────────────────────────────────────────
+
+const App = {
+  data() {
+    return {
+      treeData: { allow_additions: true, people: [], relationships: [] },
+      loading: true,
+      loadError: false,
+      editMode: isUnlocked(),
+      collapsedNodes: [],
+      draggingUnitKey: null,
+
+      showAuthModal: false,
+      pinInput: '',
+      authError: '',
+      unlockSubmitting: false,
+
+      showEditModal: false,
+      editingPerson: null,
+      editPersonForm: { full_name: '', dob: '', dod: '', note: '' },
+      editStatus: { text: '', ok: true, visible: false },
+      editSubmitting: false,
+      photoFile: null,
+
+      activeTab: 'child',
+      addMemberForm: { query: '', selectedExisting: null, dob: '', note: '', relSubtype: '' },
+      addStatus: { text: '', ok: true, visible: false },
+      addSubmitting: false,
+
+      showAdditionsDisabledNotice: false,
+
+      _resizeHandler: null,
+    };
+  },
+
+  computed: {
+    peopleById() {
+      return new Map(this.treeData.people.map(p => [p.id, p]));
+    },
+    activePartner() {
+      const map = new Map();
+      for (const rel of this.treeData.relationships) {
+        if (rel.rel_type !== 'couple') continue;
+        for (const [a, b] of [[rel.person_a_id, rel.person_b_id], [rel.person_b_id, rel.person_a_id]]) {
+          if (isActiveCouple(rel) && !map.has(a)) map.set(a, { partnerId: b, rel });
+        }
+      }
+      return map;
+    },
+    allCoupleRels() {
+      const map = new Map();
+      for (const rel of this.treeData.relationships) {
+        if (rel.rel_type !== 'couple') continue;
+        for (const [a, b] of [[rel.person_a_id, rel.person_b_id], [rel.person_b_id, rel.person_a_id]]) {
+          if (!map.has(a)) map.set(a, []);
+          map.get(a).push({ partnerId: b, rel });
+        }
+      }
+      return map;
+    },
+    childrenOf() {
+      const map = new Map();
+      for (const rel of this.treeData.relationships) {
+        if (rel.rel_type !== 'parent_child') continue;
+        if (!map.has(rel.person_a_id)) map.set(rel.person_a_id, []);
+        map.get(rel.person_a_id).push({ childId: rel.person_b_id, rel });
+      }
+      return map;
+    },
+    parentsOfChild() {
+      const map = new Map();
+      for (const rel of this.treeData.relationships) {
+        if (rel.rel_type !== 'parent_child') continue;
+        if (!map.has(rel.person_b_id)) map.set(rel.person_b_id, new Map());
+        map.get(rel.person_b_id).set(rel.person_a_id, rel);
+      }
+      return map;
+    },
+    generationsInOrder() {
+      return [...new Set(this.treeData.people.map(p => p.generation))].sort((a, b) => a - b);
+    },
+    relSubtypeOptions() {
+      return this.activeTab === 'partner'
+        ? [['', 'Married (default)'], ['partner', 'Partner'], ['ex', 'Ex-partner'], ['divorced', 'Divorced'], ['separated', 'Separated']]
+        : [['', 'Biological (default)'], ['adoptive', 'Adoptive'], ['step', 'Step'], ['foster', 'Foster']];
+    },
+    eligibleCandidates() {
+      const q = this.addMemberForm.query.trim().toLowerCase();
+      if (!q || !this.editingPerson) return [];
+      const excluded = this.ineligibleIdsForTab(this.activeTab);
+      return this.treeData.people
+        .filter(p => !excluded.has(p.id) && p.full_name.toLowerCase().includes(q))
+        .slice(0, 8);
+    },
+  },
+
+  mounted() {
+    this.loadTree();
+    this._resizeHandler = debounce(() => this.drawConnectors(), 150);
+    window.addEventListener('resize', this._resizeHandler);
+  },
+
+  unmounted() {
+    window.removeEventListener('resize', this._resizeHandler);
+  },
+
+  methods: {
+    isActiveCouple,
+    getCoupleLabel,
+
+    personById(id) {
+      return this.peopleById.get(id);
+    },
+
+    async loadTree() {
+      this.loading = true;
+      this.loadError = false;
+      try {
+        const res = await fetch(`${API_BASE}/tree`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        this.treeData = await res.json();
+        this.loading = false;
+        this.$nextTick(() => this.drawConnectors());
+      } catch {
+        this.loading = false;
+        this.loadError = true;
+      }
+    },
+
+    // ─── Lock / unlock ────────────────────────────────────────────────────────
+
+    toggleLock() {
+      if (this.editMode) {
+        clearEditToken();
+        this.editMode = false;
+      } else {
+        this.pinInput = '';
+        this.authError = '';
+        this.showAuthModal = true;
+        this.$nextTick(() => this.$refs.pinInput?.focus());
+      }
+    },
+
+    async submitUnlock() {
+      const pin = this.pinInput.trim();
+      if (!pin) return;
+
+      this.unlockSubmitting = true;
+      this.authError = '';
+
+      try {
+        await unlockWithPin(pin);
+        this.editMode = true;
+        this.showAuthModal = false;
+      } catch (err) {
+        this.authError = err.message || 'Incorrect PIN. Please try again.';
+        this.pinInput = '';
+      } finally {
+        this.unlockSubmitting = false;
+      }
+    },
+
+    // ─── Generation layout ────────────────────────────────────────────────────
+
+    unitKey(unit) {
+      return unit.partnerId ? `${unit.primaryId}-${unit.partnerId}` : `${unit.primaryId}`;
+    },
+
+    unitsFor(gen) {
+      const placed = new Set();
+      const people = this.treeData.people
+        .filter(p => p.generation === gen)
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+      const units = [];
+      for (const person of people) {
+        if (placed.has(person.id)) continue;
+        placed.add(person.id);
+
+        const ap = this.activePartner.get(person.id);
+        const partner = ap && !placed.has(ap.partnerId) && this.peopleById.get(ap.partnerId)?.generation === gen
+          ? this.peopleById.get(ap.partnerId)
+          : null;
+
+        if (partner) placed.add(partner.id);
+
+        units.push({ primaryId: person.id, partnerId: partner?.id ?? null, coupleRel: ap?.rel ?? null });
+      }
+      return units;
+    },
+
+    childCountFor(unit) {
+      const myKids      = this.childrenOf.get(unit.primaryId) ?? [];
+      const partnerKids = unit.partnerId ? (this.childrenOf.get(unit.partnerId) ?? []) : [];
+      return new Set([...myKids.map(c => c.childId), ...partnerKids.map(c => c.childId)]).size;
+    },
+
+    // ─── Expand / collapse ────────────────────────────────────────────────────
+
+    getDescendants(primaryId, partnerId) {
+      const result = new Set();
+      const queue  = [];
+
+      const enqueue = (parentId) => {
+        for (const { childId } of this.childrenOf.get(parentId) ?? []) {
+          if (result.has(childId)) continue;
+          result.add(childId);
+          queue.push(childId);
+          const ap = this.activePartner.get(childId);
+          if (ap) result.add(ap.partnerId);
+        }
+      };
+
+      enqueue(primaryId);
+      if (partnerId) enqueue(partnerId);
+
+      while (queue.length) {
+        const id = queue.shift();
+        enqueue(id);
+        const ap = this.activePartner.get(id);
+        if (ap) enqueue(ap.partnerId);
+      }
+
+      return result;
+    },
+
+    getAncestors(personId) {
+      const result = new Set();
+      const queue   = [personId];
+
+      while (queue.length) {
+        const id = queue.shift();
+        for (const parentId of this.parentsOfChild.get(id)?.keys() ?? []) {
+          if (result.has(parentId)) continue;
+          result.add(parentId);
+          queue.push(parentId);
+        }
+      }
+
+      return result;
+    },
+
+    isUnitHidden(unit) {
+      for (const parentId of this.collapsedNodes) {
+        const partnerId = this.activePartner.get(parentId)?.partnerId;
+        const descendants = this.getDescendants(parentId, partnerId);
+        if (descendants.has(unit.primaryId) || (unit.partnerId && descendants.has(unit.partnerId))) return true;
+      }
+      return false;
+    },
+
+    toggleSubtree(unit) {
+      const idx = this.collapsedNodes.indexOf(unit.primaryId);
+      if (idx === -1) this.collapsedNodes.push(unit.primaryId);
+      else this.collapsedNodes.splice(idx, 1);
+      this.$nextTick(() => this.drawConnectors());
+    },
+
+    // ─── Drag & drop reordering ───────────────────────────────────────────────
+
+    onDragStart(unit) {
+      this.draggingUnitKey = this.unitKey(unit);
+    },
+
+    onDragEnd() {
+      this.draggingUnitKey = null;
+      this.$nextTick(() => this.drawConnectors());
+    },
+
+    onDragOver(e, gen) {
+      e.preventDefault();
+      if (!this.draggingUnitKey) return;
+
+      const rowEl = e.currentTarget;
+      const siblingEls = [...rowEl.querySelectorAll('.family-unit')]
+        .filter(el => el.dataset.unitKey !== this.draggingUnitKey);
+
+      let targetIndex = siblingEls.length;
+      for (let i = 0; i < siblingEls.length; i++) {
+        const rect = siblingEls[i].getBoundingClientRect();
+        if (e.clientX < rect.left + rect.width / 2) { targetIndex = i; break; }
+      }
+
+      const units = this.unitsFor(gen);
+      const draggedIdx = units.findIndex(u => this.unitKey(u) === this.draggingUnitKey);
+      if (draggedIdx === -1) return;
+
+      const [dragged] = units.splice(draggedIdx, 1);
+      units.splice(targetIndex, 0, dragged);
+
+      let idx = 0;
+      for (const unit of units) {
+        const primary = this.peopleById.get(unit.primaryId);
+        if (primary) primary.order_index = idx++;
+        if (unit.partnerId) {
+          const partner = this.peopleById.get(unit.partnerId);
+          if (partner) partner.order_index = idx++;
+        }
+      }
+
+      this.drawConnectors();
+    },
+
+    onDrop(gen) {
+      if (!this.draggingUnitKey) return;
+      this.persistOrder(gen);
+    },
+
+    async persistOrder(gen) {
+      const order = [];
+      for (const unit of this.unitsFor(gen)) {
+        order.push(unit.primaryId);
+        if (unit.partnerId) order.push(unit.partnerId);
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/generations/${gen}/order`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getEditToken()}` },
+          body: JSON.stringify({ order }),
+        });
+        if (!res.ok) throw new Error();
+      } catch {
+        this.loadTree();
+      }
+    },
+
+    // ─── SVG connector lines ──────────────────────────────────────────────────
+
+    buildParentGroups() {
+      const groups = new Map(); // sorted parentIds key → { parentIds, children }
+
+      for (const [childId, parentRels] of this.parentsOfChild) {
+        const parentIds = [...parentRels.keys()].sort((a, b) => a - b);
+        const key = parentIds.join(',');
+
+        if (!groups.has(key)) groups.set(key, { parentIds, children: [] });
+        groups.get(key).children.push({ childId, rel: parentRels.get(parentIds[0]) });
+      }
+
+      return [...groups.values()];
+    },
+
+    isActiveCoupleBetween(aId, bId) {
+      return (this.allCoupleRels.get(aId) ?? []).some(({ partnerId, rel }) => partnerId === bId && isActiveCouple(rel));
+    },
+
+    drawConnectors() {
+      const rootEl = this.$refs.treeRoot;
+      if (!rootEl) return;
+
+      document.getElementById('connector-svg')?.remove();
+
+      const rootRect = rootEl.getBoundingClientRect();
+      const svg = svgEl('svg');
+      svg.id = 'connector-svg';
+      svg.setAttribute('aria-hidden', 'true');
+
+      for (const group of this.buildParentGroups()) {
+        const parentCards = group.parentIds
+          .map(id => rootEl.querySelector(`.person-card[data-person-id="${id}"]`))
+          .filter(Boolean);
+        if (!parentCards.length) continue;
+
+        const parentRects  = parentCards.map(c => c.getBoundingClientRect());
+        const dropX         = avg(parentRects.map(r => r.left + r.width / 2)) - rootRect.left;
+        const coupleBottomY = parentRects[0].bottom - rootRect.top;
+
+        const childPoints = [];
+        for (const { childId, rel } of group.children) {
+          const childCard = rootEl.querySelector(`.person-card[data-person-id="${childId}"]`);
+          if (!childCard || childCard.closest('.family-unit')?.hidden) continue;
+          const cRect = childCard.getBoundingClientRect();
+          childPoints.push({
+            x: cRect.left + cRect.width / 2 - rootRect.left,
+            y: cRect.top - rootRect.top,
+            rel,
+          });
+        }
+        if (!childPoints.length) continue;
+
+        const busY     = (coupleBottomY + childPoints[0].y) / 2;
+        const xs       = [dropX, ...childPoints.map(c => c.x)];
+        const minX     = Math.min(...xs);
+        const maxX     = Math.max(...xs);
+        const isCouple = group.parentIds.length === 1 || this.isActiveCoupleBetween(group.parentIds[0], group.parentIds[1]);
+
+        svg.appendChild(neutralPath(`M${dropX},${coupleBottomY} L${dropX},${busY}`, !isCouple));
+        if (maxX > minX) {
+          svg.appendChild(neutralPath(`M${minX},${busY} L${maxX},${busY}`, !isCouple));
+        }
+
+        for (const { x, y, rel } of childPoints) {
+          svg.appendChild(relPath(`M${x},${busY} L${x},${y}`, rel));
+        }
+      }
+
+      rootEl.appendChild(svg);
+    },
+
+    // ─── Edit-person / add-member modal ────────────────────────────────────────
+
+    openPersonEditor(person) {
+      if (!this.editMode) return;
+      if (!this.treeData.allow_additions) {
+        this.showAdditionsDisabledNotice = true;
+        return;
+      }
+
+      this.editingPerson = person;
+      this.editPersonForm = { full_name: person.full_name, dob: person.dob ?? '', dod: person.dod ?? '', note: person.note ?? '' };
+      this.editStatus.visible = false;
+      this.photoFile = null;
+      this.activeTab = 'child';
+      this.resetAddMemberForm();
+      this.showEditModal = true;
+    },
+
+    closeEditModal() {
+      this.showEditModal = false;
+      this.editingPerson = null;
+    },
+
+    switchTab(tab) {
+      this.activeTab = tab;
+      this.resetAddMemberForm();
+    },
+
+    resetAddMemberForm() {
+      this.addMemberForm = { query: '', selectedExisting: null, dob: '', note: '', relSubtype: '' };
+      this.addStatus.visible = false;
+    },
+
+    selectExisting(candidate) {
+      this.addMemberForm.selectedExisting = candidate;
+    },
+
+    clearSelectedExisting() {
+      this.addMemberForm.selectedExisting = null;
+    },
+
+    ineligibleIdsForTab(tab) {
+      const person = this.editingPerson;
+      const excluded = new Set([person.id]);
+
+      if (tab === 'parent') {
+        const partnerId = this.activePartner.get(person.id)?.partnerId;
+        for (const id of this.getDescendants(person.id, partnerId)) excluded.add(id);
+      } else if (tab === 'child') {
+        for (const id of this.getAncestors(person.id)) excluded.add(id);
+      }
+
+      return excluded;
+    },
+
+    onPhotoChange(e) {
+      this.photoFile = e.target.files[0] ?? null;
+    },
+
+    async submitEditPerson() {
+      this.editSubmitting = true;
+      this.editStatus.visible = false;
+      const token = getEditToken();
+
+      try {
+        const body = {
+          full_name: this.editPersonForm.full_name.trim(),
+          dob:  this.editPersonForm.dob  || null,
+          dod:  this.editPersonForm.dod  || null,
+          note: this.editPersonForm.note.trim() || null,
+        };
+
+        const res = await fetch(`${API_BASE}/people/${this.editingPerson.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error();
+        const { person: updated } = await res.json();
+        Object.assign(this.editingPerson, updated);
+
+        if (this.photoFile) {
+          const fd = new FormData();
+          fd.append('photo', this.photoFile);
+          const pr = await fetch(`${API_BASE}/people/${this.editingPerson.id}/photo`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: fd,
+          });
+          if (pr.ok) {
+            const { photo_id } = await pr.json();
+            this.editingPerson.photo_id = photo_id;
+          }
+        }
+
+        this.editStatus = { text: 'Saved!', ok: true, visible: true };
+      } catch {
+        this.editStatus = { text: 'Save failed. Please try again.', ok: false, visible: true };
+      } finally {
+        this.editSubmitting = false;
+      }
+    },
+
+    async submitAddMember() {
+      this.addSubmitting = true;
+      this.addStatus.visible = false;
+
+      const tab   = this.activeTab;
+      const form  = this.addMemberForm;
+      const token = getEditToken();
+
+      try {
+        if (form.selectedExisting) {
+          const target   = form.selectedExisting;
+          const endpoint = tab === 'parent' ? 'link-parent' : tab === 'child' ? 'link-child' : 'link-partner';
+          const idField  = tab === 'parent' ? 'parent_id'  : tab === 'child' ? 'child_id'  : 'partner_id';
+
+          const res = await fetch(`${API_BASE}/people/${this.editingPerson.id}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ [idField]: target.id, rel_subtype: form.relSubtype || null }),
+          });
+          if (!res.ok) {
+            const { error } = await res.json().catch(() => ({}));
+            throw new Error(error || 'Failed');
+          }
+
+          const data = await res.json();
+          this.treeData.relationships.push(data.relationship);
+          this.addStatus = { text: `${target.full_name} linked as ${tab} — awaiting verification.`, ok: true, visible: true };
+        } else {
+          const name = form.query.trim();
+          if (!name) throw new Error('Enter a name.');
+
+          const endpoint = tab === 'child' ? 'children' : tab === 'parent' ? 'parent' : 'partner';
+          const res = await fetch(`${API_BASE}/people/${this.editingPerson.id}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              full_name:   name,
+              dob:         form.dob || null,
+              note:        form.note.trim() || null,
+              rel_subtype: form.relSubtype || null,
+            }),
+          });
+          if (!res.ok) {
+            const { error } = await res.json().catch(() => ({}));
+            throw new Error(error || 'Failed');
+          }
+
+          const data = await res.json();
+          this.treeData.people.push(data.person);
+          this.treeData.relationships.push(data.relationship);
+          this.addStatus = { text: `${data.person.full_name} added — awaiting verification.`, ok: true, visible: true };
+        }
+
+        this.resetAddMemberForm();
+        this.$nextTick(() => this.drawConnectors());
+      } catch (err) {
+        this.addStatus = { text: err.message || 'Failed to add. Please try again.', ok: false, visible: true };
+      } finally {
+        this.addSubmitting = false;
+      }
+    },
+  },
+};
+
+Vue.createApp(App).component('person-card', PersonCard).mount('#app');

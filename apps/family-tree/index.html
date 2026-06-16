@@ -14,122 +14,166 @@
 </head>
 
 <body>
-    <nav>
-        <p>Family Tree</p>
-    </nav>
+    <div id="app">
+        <nav>
+            <p>Family Tree</p>
+            <button id="lock-toggle-btn" class="lock-btn" type="button" :aria-pressed="String(editMode)"
+                :aria-label="editMode ? 'Lock editing' : 'Unlock editing'" @click="toggleLock">{{ editMode ? '🔓' : '🔒' }}</button>
+        </nav>
 
-    <main>
-        <div id="tree-loading" class="tree-status">Loading family tree…</div>
-        <div id="tree-error" class="tree-status" hidden>
-            <p>Could not load the family tree.</p>
-            <button id="retry-btn" class="ft-btn-primary">Retry</button>
-        </div>
-        <div id="tree-root"></div>
-    </main>
-
-    <footer>
-        <p>&copy; 2026 Dinuka &mdash; Private family tree, not publicly indexed.</p>
-    </footer>
-
-    <!-- PIN authentication modal -->
-    <div id="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="auth-title">
-        <div class="modal-backdrop"></div>
-        <div class="modal-box">
-            <button class="modal-close" aria-label="Close">&times;</button>
-            <h2 id="auth-title">Verify Identity</h2>
-            <p id="auth-modal-name" class="modal-subtitle"></p>
-            <label class="ft-label">
-                PIN
-                <input type="password" id="pin-input" inputmode="numeric" maxlength="8"
-                    placeholder="Enter your PIN" autocomplete="off">
-            </label>
-            <p id="auth-error" class="form-error" hidden>Incorrect PIN. Please try again.</p>
-            <button id="auth-submit" class="ft-btn-primary ft-btn-full">Unlock</button>
-        </div>
-    </div>
-
-    <!-- Edit / add-member modal -->
-    <div id="edit-modal" hidden role="dialog" aria-modal="true" aria-labelledby="edit-title">
-        <div class="modal-backdrop"></div>
-        <div class="modal-box">
-            <button class="modal-close" aria-label="Close">&times;</button>
-            <h2 id="edit-title">Your Info</h2>
-
-            <form id="edit-form" novalidate>
-                <label class="ft-label">Name <input name="full_name"></label>
-                <label class="ft-label">Date of birth <input type="date" name="dob"></label>
-                <label class="ft-label">Date of death <input type="date" name="dod"></label>
-                <label class="ft-label">Note <textarea name="note" rows="3"></textarea></label>
-                <label class="ft-label">
-                    Photo
-                    <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
-                    <span class="field-hint">JPEG, PNG or WebP &mdash; max 5 MB</span>
-                </label>
-                <p id="edit-status" class="form-status" hidden></p>
-                <div class="form-actions">
-                    <button type="submit" class="ft-btn-primary">Save</button>
-                </div>
-            </form>
-
-            <hr class="modal-divider">
-            <h3>Add family member</h3>
-
-            <div class="add-tabs">
-                <button class="tab-btn active" data-tab="child">Add Child</button>
-                <button class="tab-btn" data-tab="partner">Add Partner</button>
+        <main>
+            <div v-if="loading" class="tree-status">Loading family tree…</div>
+            <div v-else-if="loadError" class="tree-status">
+                <p>Could not load the family tree.</p>
+                <button class="ft-btn-primary" @click="loadTree">Retry</button>
             </div>
+            <div v-else id="tree-root" ref="treeRoot">
+                <p v-if="!treeData.people.length" class="tree-empty">No family members yet.</p>
 
-            <form id="add-member-form" novalidate>
-                <input type="hidden" name="member_type" value="child">
-                <label class="ft-label">Name <input name="full_name" required></label>
-                <label class="ft-label">Date of birth <input type="date" name="dob"></label>
-                <label class="ft-label">Note <textarea name="note" rows="2"></textarea></label>
-                <label class="ft-label">
-                    Relationship type
-                    <select id="rel-subtype" name="rel_subtype">
-                        <option value="">Biological (default)</option>
-                        <option value="adoptive">Adoptive</option>
-                        <option value="step">Step</option>
-                        <option value="foster">Foster</option>
-                    </select>
-                </label>
-                <label class="ft-label">
-                    Their PIN
-                    <input type="password" name="pin" inputmode="numeric" maxlength="8"
-                        required autocomplete="off">
-                    <span class="field-hint">They'll use this to edit their own info later</span>
-                </label>
-                <p id="add-status" class="form-status" hidden></p>
-                <div class="form-actions">
-                    <button type="submit" class="ft-btn-primary">Add</button>
+                <div v-for="gen in generationsInOrder" :key="gen" class="gen-row" :data-generation="gen"
+                    @dragover="editMode && onDragOver($event, gen)" @drop="editMode && onDrop(gen)">
+                    <div v-for="unit in unitsFor(gen)" :key="unitKey(unit)" class="family-unit"
+                        :data-unit-key="unitKey(unit)" :hidden="isUnitHidden(unit)" :draggable="editMode"
+                        :class="{ dragging: draggingUnitKey === unitKey(unit) }" @dragstart="onDragStart(unit)"
+                        @dragend="onDragEnd">
+                        <div class="couple-row">
+                            <person-card :person="personById(unit.primaryId)" @open="openPersonEditor(personById(unit.primaryId))"></person-card>
+
+                            <template v-if="unit.partnerId">
+                                <span class="couple-connector" aria-hidden="true" :title="getCoupleLabel(unit.coupleRel)"
+                                    :class="[isActiveCouple(unit.coupleRel) ? 'connector-active' : 'connector-ex', { 'connector-unconfirmed': !unit.coupleRel.confirmed }]">{{ isActiveCouple(unit.coupleRel) ? '♥' : '✕' }}</span>
+                                <person-card :person="personById(unit.partnerId)" @open="openPersonEditor(personById(unit.partnerId))"></person-card>
+                            </template>
+                        </div>
+
+                        <button v-if="childCountFor(unit) > 0" class="expand-btn" :data-parent-id="unit.primaryId"
+                            :aria-expanded="String(!collapsedNodes.includes(unit.primaryId))" @click="toggleSubtree(unit)">
+                            <span class="expand-icon">▾</span><span class="expand-label"> {{ childCountFor(unit) }} {{ childCountFor(unit) === 1 ? 'child' : 'children' }}</span>
+                        </button>
+                    </div>
                 </div>
-            </form>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Dinuka &mdash; Private family tree, not publicly indexed.</p>
+        </footer>
+
+        <!-- PIN authentication modal -->
+        <div v-if="showAuthModal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <div class="modal-backdrop" @click="showAuthModal = false"></div>
+            <div class="modal-box">
+                <button class="modal-close" aria-label="Close" @click="showAuthModal = false">&times;</button>
+                <h2 id="auth-title">Unlock Editing</h2>
+                <p class="modal-subtitle">Enter the family PIN to make changes.</p>
+                <label class="ft-label">
+                    PIN
+                    <input type="password" ref="pinInput" v-model="pinInput" inputmode="numeric" maxlength="8"
+                        placeholder="Enter PIN" autocomplete="off" @keydown.enter="submitUnlock">
+                </label>
+                <p v-if="authError" class="form-error">{{ authError }}</p>
+                <button class="ft-btn-primary ft-btn-full" :disabled="unlockSubmitting" @click="submitUnlock">{{ unlockSubmitting ? 'Verifying…' : 'Unlock' }}</button>
+            </div>
+        </div>
+
+        <!-- Edit / add-member modal -->
+        <div v-if="showEditModal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+            <div class="modal-backdrop" @click="closeEditModal"></div>
+            <div class="modal-box">
+                <button class="modal-close" aria-label="Close" @click="closeEditModal">&times;</button>
+                <h2 id="edit-title">Your Info</h2>
+
+                <form novalidate @submit.prevent="submitEditPerson">
+                    <label class="ft-label">Name <input v-model="editPersonForm.full_name"></label>
+                    <label class="ft-label">Date of birth <input type="date" v-model="editPersonForm.dob"></label>
+                    <label class="ft-label">Date of death <input type="date" v-model="editPersonForm.dod"></label>
+                    <label class="ft-label">Note <textarea v-model="editPersonForm.note" rows="3"></textarea></label>
+                    <label class="ft-label">
+                        Photo
+                        <input type="file" accept="image/jpeg,image/png,image/webp" @change="onPhotoChange">
+                        <span class="field-hint">JPEG, PNG or WebP &mdash; max 5 MB</span>
+                    </label>
+                    <p v-if="editStatus.visible" class="form-status" :class="editStatus.ok ? 'form-status--ok' : 'form-status--err'">{{ editStatus.text }}</p>
+                    <div class="form-actions">
+                        <button type="submit" class="ft-btn-primary" :disabled="editSubmitting">{{ editSubmitting ? 'Saving…' : 'Save' }}</button>
+                    </div>
+                </form>
+
+                <hr class="modal-divider">
+                <h3>Add family member</h3>
+
+                <div class="add-tabs">
+                    <button class="tab-btn" :class="{ active: activeTab === 'child' }" @click="switchTab('child')">Add Child</button>
+                    <button class="tab-btn" :class="{ active: activeTab === 'partner' }" @click="switchTab('partner')">Add Partner</button>
+                    <button class="tab-btn" :class="{ active: activeTab === 'parent' }" @click="switchTab('parent')">Add Parent</button>
+                </div>
+
+                <form novalidate @submit.prevent="submitAddMember">
+                    <label class="ft-label">
+                        Name
+                        <input v-model="addMemberForm.query" placeholder="Type a name…" autocomplete="off"
+                            @input="addMemberForm.selectedExisting = null" :required="!addMemberForm.selectedExisting">
+                        <span class="field-hint">Matching people already in the tree show up below as chips — click one to link them instead of creating someone new.</span>
+                    </label>
+
+                    <div v-if="eligibleCandidates.length || addMemberForm.selectedExisting" class="chip-list">
+                        <button v-if="addMemberForm.selectedExisting" type="button" class="chip chip--selected" @click="clearSelectedExisting">
+                            {{ addMemberForm.selectedExisting.full_name }}<span v-if="!addMemberForm.selectedExisting.confirmed"> (pending)</span> ✕
+                        </button>
+                        <template v-else>
+                            <button v-for="c in eligibleCandidates" :key="c.id" type="button" class="chip" @click="selectExisting(c)">
+                                {{ c.full_name }}<span v-if="!c.confirmed"> (pending)</span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <label class="ft-label" v-show="!addMemberForm.selectedExisting">Date of birth <input type="date" v-model="addMemberForm.dob"></label>
+                    <label class="ft-label" v-show="!addMemberForm.selectedExisting">Note <textarea v-model="addMemberForm.note" rows="2"></textarea></label>
+
+                    <label class="ft-label">
+                        Relationship type
+                        <select v-model="addMemberForm.relSubtype">
+                            <option v-for="[value, label] in relSubtypeOptions" :key="value" :value="value">{{ label }}</option>
+                        </select>
+                    </label>
+
+                    <p v-if="addStatus.visible" class="form-status" :class="addStatus.ok ? 'form-status--ok' : 'form-status--err'">{{ addStatus.text }}</p>
+                    <div class="form-actions">
+                        <button type="submit" class="ft-btn-primary" :disabled="addSubmitting">{{ addSubmitting ? 'Adding…' : 'Add' }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Additions disabled notice -->
+        <div v-if="showAdditionsDisabledNotice" role="dialog" aria-modal="true">
+            <div class="modal-backdrop" @click="showAdditionsDisabledNotice = false"></div>
+            <div class="modal-box modal-box--narrow">
+                <button class="modal-close" aria-label="Close" @click="showAdditionsDisabledNotice = false">&times;</button>
+                <p class="notice-icon" aria-hidden="true">🔒</p>
+                <h2>Additions Paused</h2>
+                <p class="text-muted">New additions to the family tree are temporarily paused. Please check back later.</p>
+            </div>
         </div>
     </div>
 
-    <!-- Unconfirmed person notice -->
-    <div id="unconfirmed-notice" hidden role="dialog" aria-modal="true">
-        <div class="modal-backdrop"></div>
-        <div class="modal-box modal-box--narrow">
-            <button class="modal-close" aria-label="Close">&times;</button>
-            <p class="notice-icon" aria-hidden="true">⏳</p>
-            <h2>Pending Verification</h2>
-            <p><strong id="unconfirmed-notice-name"></strong> has been added to the family tree.</p>
-            <p class="text-muted">This entry will be reviewed and confirmed by Dinuka before it's finalised.</p>
+    <script type="text/x-template" id="person-card-template">
+        <div class="person-card" :class="{ unconfirmed: !person.confirmed }" :data-person-id="person.id">
+            <button class="person-photo-btn" :aria-label="'Edit ' + person.full_name" @click="$emit('open')">
+                <img v-if="person.photo_id" class="person-photo" :alt="person.full_name" :src="photoSrc" @error="onImgError">
+                <svg v-else viewBox="0 0 80 80" width="80" height="80" aria-hidden="true" class="person-photo person-avatar">
+                    <circle cx="40" cy="40" r="40" fill="#2e2e50" />
+                    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" fill="#30eebf" font-size="28" font-family="Inter, sans-serif" font-weight="600">{{ initials }}</text>
+                </svg>
+            </button>
+            <p class="person-name">{{ person.full_name }}</p>
+            <p v-if="person.dob || person.dod" class="person-dates">{{ formattedDates }}</p>
+            <p v-if="person.note" class="person-note" :title="person.note">{{ person.note }}</p>
+            <span v-if="!person.confirmed" class="unconfirmed-badge">Pending</span>
         </div>
-    </div>
+    </script>
 
-    <!-- Additions disabled notice -->
-    <div id="additions-disabled-notice" hidden role="dialog" aria-modal="true">
-        <div class="modal-backdrop"></div>
-        <div class="modal-box modal-box--narrow">
-            <button class="modal-close" aria-label="Close">&times;</button>
-            <p class="notice-icon" aria-hidden="true">🔒</p>
-            <h2>Additions Paused</h2>
-            <p class="text-muted">New additions to the family tree are temporarily paused. Please check back later.</p>
-        </div>
-    </div>
-
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script type="module" src="/apps/family-tree/family-tree.js"></script>
 </body>
 

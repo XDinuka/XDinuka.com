@@ -10,23 +10,28 @@ MariaDB schema for the family tree feature. The API is the only writer; the fron
 
 ```sql
 CREATE TABLE people (
-  id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  full_name  VARCHAR(120) NOT NULL,
-  dob        DATE NULL,                   -- NULL if unknown
-  dod        DATE NULL,                   -- NULL if still living
-  note       TEXT NULL,
-  photo_id   CHAR(36) NULL,              -- UUID v4; FK to photos.id
-  pin_hash   VARCHAR(255) NOT NULL,      -- bcrypt, cost factor 10
-  generation TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  -- 0 = root ancestors; auto-set to parent.generation + 1 on insert via API
-  confirmed  TINYINT(1) NOT NULL DEFAULT 0,
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  full_name   VARCHAR(120) NOT NULL,
+  dob         DATE NULL,                   -- NULL if unknown
+  dod         DATE NULL,                   -- NULL if still living
+  note        TEXT NULL,
+  photo_id    CHAR(36) NULL,              -- UUID v4; FK to photos.id
+  generation  TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  -- 0 = root ancestors; auto-set to parent.generation + 1 (or - 1 for added parents) on insert via API
+  order_index SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  -- left-to-right display position within `generation`. Unique only *within* a generation,
+  -- not globally. Reassigned wholesale by PUT /generations/:gen/order (drag & drop).
+  confirmed   TINYINT(1) NOT NULL DEFAULT 0,
   -- 0 = unconfirmed (added by family, awaiting manual confirmation in DB)
   -- 1 = confirmed by Dinuka
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE SET NULL
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_people_gen_order (generation, order_index)
 );
 ```
+
+There is no per-person PIN anymore — editing is gated by a single global PIN, see `settings` below and `POST /auth/unlock` in `api-spec.md`.
 
 ### `photos`
 
@@ -74,8 +79,11 @@ CREATE TABLE settings (
 
 -- Default values
 INSERT INTO settings (key_name, value) VALUES
-  ('allow_additions', 'true');
+  ('allow_additions', 'true'),
+  ('edit_pin_hash', '$2b$10$...');  -- bcrypt hash of the single global edit PIN
 ```
+
+`edit_pin_hash` replaces the old per-person `people.pin_hash` column. There is exactly one PIN for the whole tree; entering it via `POST /auth/unlock` grants a token that can edit *any* person or relationship, not just one person's own record.
 
 ---
 
@@ -84,6 +92,7 @@ INSERT INTO settings (key_name, value) VALUES
 ```sql
 CREATE INDEX idx_people_generation ON people (generation);
 CREATE INDEX idx_people_confirmed  ON people (confirmed);
+-- uq_people_gen_order above already covers (generation, order_index) lookups
 CREATE INDEX idx_rel_a             ON relationships (person_a_id);
 CREATE INDEX idx_rel_b             ON relationships (person_b_id);
 CREATE INDEX idx_rel_confirmed     ON relationships (confirmed);
@@ -95,9 +104,10 @@ CREATE INDEX idx_rel_confirmed     ON relationships (confirmed);
 
 | Field | Convention |
 |-------|------------|
-| `generation` | Set by API: `parent.generation + 1`. Root ancestors are 0. Never computed at query time. |
+| `generation` | Set by API: `parent.generation + 1` when adding a child, `child.generation - 1` when adding a parent. Root ancestors are 0. Never computed at query time. |
+| `order_index` | Left-to-right position among siblings *in the same generation only* — not a global ordering. New people are appended (`max(order_index) + 1` for that generation). Reassigned in bulk by `PUT /generations/:gen/order`. |
 | `rel_type = couple`, `person_a_id` | Always the smaller of the two IDs. |
-| `pin_hash` | bcrypt with cost factor 10. Plain-text PINs are 4–8 numeric digits. Never stored or logged. |
+| `edit_pin_hash` | bcrypt with cost factor 10, stored once in `settings`. Plain-text PIN is 4–8 numeric digits. Never stored or logged. |
 | `photo_id` | UUID v4 (e.g. `550e8400-e29b-41d4-a716-446655440000`). API generates on upload. |
 | `confirmed = 0` | Default for all new rows created via API. Set to `1` manually in the DB after Dinuka reviews. |
 | `allow_additions` | Read by the API on every mutation request. Set to `'false'` in settings to block all new additions. |
@@ -135,12 +145,12 @@ Active couples (`NULL`, `married`, `partner`) are shown side-by-side in the same
 INSERT INTO photos (id, data, mime_type) VALUES
   ('aaaaaaaa-0000-4000-a000-000000000001', '', 'image/webp');
 
-INSERT INTO people (id, full_name, dob, note, photo_id, pin_hash, generation, confirmed) VALUES
-  (1, 'Grandfather', '1940-03-15', 'Patriarch of the family.', NULL, '$2b$10$...', 0, 1),
-  (2, 'Grandmother', '1943-07-22', NULL, NULL, '$2b$10$...', 0, 1),
-  (3, 'Father',      '1965-11-01', NULL, NULL, '$2b$10$...', 1, 1),
-  (4, 'Mother',      '1968-04-18', NULL, NULL, '$2b$10$...', 1, 1),
-  (5, 'Child',       '1995-09-30', NULL, NULL, '$2b$10$...', 2, 1);
+INSERT INTO people (id, full_name, dob, note, photo_id, generation, order_index, confirmed) VALUES
+  (1, 'Grandfather', '1940-03-15', 'Patriarch of the family.', NULL, 0, 0, 1),
+  (2, 'Grandmother', '1943-07-22', NULL, NULL, 0, 1, 1),
+  (3, 'Father',      '1965-11-01', NULL, NULL, 1, 0, 1),
+  (4, 'Mother',      '1968-04-18', NULL, NULL, 1, 1, 1),
+  (5, 'Child',       '1995-09-30', NULL, NULL, 2, 0, 1);
 
 INSERT INTO relationships (person_a_id, person_b_id, rel_type, rel_subtype, confirmed) VALUES
   (1, 2, 'couple',       NULL,        1),
@@ -159,3 +169,12 @@ INSERT INTO relationships (person_a_id, person_b_id, rel_type, rel_subtype, conf
 2. If 404 → fallback to `GET {API_BASE}/photos/{photo_id}` (API serves the blob from DB)
 
 The external compression tool runs separately, queries `SELECT id, data FROM photos`, writes each as `family-tree/photos/{id}.webp`, and commits to the repo. Once committed, the static file serves instead of the API.
+
+---
+
+## Reordering within a generation
+
+`PUT /generations/:gen/order` (see `api-spec.md`) receives the full ordered list of person IDs for one generation and must rewrite all their `order_index` values in one go. Because `uq_people_gen_order` is unique on `(generation, order_index)`, a naive row-by-row `UPDATE` can hit a duplicate-key error mid-reorder (e.g. swapping positions 0 and 1). Do it in a transaction, either by:
+
+- Temporarily offsetting all affected rows to a non-colliding range (e.g. `order_index + 10000`) before applying the final values, or
+- Disabling unique checks for the duration of the transaction (`SET unique_checks=0`) and re-enabling after.

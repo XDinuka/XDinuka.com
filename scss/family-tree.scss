@@ -293,6 +293,10 @@ main {
     color: var(--text-muted);
     margin-bottom: 1rem;
 
+    &[hidden] {
+        display: none;
+    }
+
     input,
     textarea,
     select {
@@ -392,6 +396,37 @@ main {
     }
 }
 
+// ── Chip picker (existing-person link suggestions) ───────────────────────────
+
+.chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: -0.5rem 0 1rem;
+}
+
+.chip {
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    color: var(--text);
+    padding: 0.3rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+
+    &:hover {
+        background: var(--surface-hover);
+    }
+
+    &.chip--selected {
+        background: var(--grad-mid);
+        border-color: transparent;
+        color: var(--bg);
+    }
+}
+
 // ── Primary button ────────────────────────────────────────────────────────────
 
 .ft-btn-primary {
@@ -430,6 +465,47 @@ main {
     color: var(--text-muted);
     font-size: 0.9rem;
     line-height: 1.6;
+}
+
+// ── Nav lock toggle ──────────────────────────────────────────────────────────
+
+nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.lock-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 50%;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--transition);
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    &[aria-pressed="true"] {
+        background: var(--grad-mid);
+    }
+}
+
+// ── Drag & drop reordering ──────────────────────────────────────────────────
+
+.family-unit {
+    &[draggable="true"] {
+        cursor: grab;
+    }
+
+    &.dragging {
+        opacity: 0.4;
+        cursor: grabbing;
+    }
 }
 
 // ── Responsive ────────────────────────────────────────────────────────────────
