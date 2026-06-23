@@ -434,6 +434,45 @@ main {
     line-height: 1.6;
 }
 
+/* ── Static mode ──────────────────────────────────────────────────────────────── */
+
+.readonly-badge {
+    display: inline-block;
+    margin-left: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(48, 238, 191, 0.12);
+    border: 1px solid rgba(48, 238, 191, 0.25);
+    border-radius: 999px;
+    color: var(--grad-mid);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.export-btn {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 100;
+    padding: 0.55rem 1.1rem;
+    background: var(--surface);
+    border: 1px solid rgba(48, 238, 191, 0.35);
+    border-radius: 999px;
+    color: var(--grad-mid);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.export-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--grad-mid);
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {

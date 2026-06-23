@@ -1,3 +1,6 @@
+// Set to true and populate tree-data.json to run without the API
+export const STATIC_MODE = false;
+
 export const API_BASE = 'https://api.xdinuka.com/family-tree';
 
 export function getToken(personId) {

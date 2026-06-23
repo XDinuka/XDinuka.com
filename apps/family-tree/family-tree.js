@@ -1,4 +1,4 @@
-import { getToken, openAuthModal, API_BASE } from './auth.js';
+import { getToken, openAuthModal, API_BASE, STATIC_MODE } from './auth.js';
 
 let treeData      = { allow_additions: true, people: [], relationships: [] };
 let allowAdditions = true;
@@ -14,6 +14,20 @@ document.addEventListener('DOMContentLoaded', () => {
   loadTree();
   document.getElementById('retry-btn')?.addEventListener('click', loadTree);
   window.addEventListener('resize', debounce(drawConnectors, 150));
+
+  if (STATIC_MODE) {
+    document.querySelector('nav').insertAdjacentHTML('beforeend', '<span class="readonly-badge">Archived</span>');
+  }
+
+  document.getElementById('export-btn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(treeData, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: 'tree-data.json',
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 });
 
 async function loadTree() {
@@ -22,7 +36,9 @@ async function loadTree() {
   document.getElementById('tree-root').innerHTML = '';
 
   try {
-    const res = await fetch(`${API_BASE}/tree`);
+    const res = STATIC_MODE
+      ? await fetch('./tree-data.json')
+      : await fetch(`${API_BASE}/tree`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     treeData = await res.json();
     allowAdditions = treeData.allow_additions !== false;
@@ -164,9 +180,9 @@ function buildCard(person) {
   card.className = 'person-card' + (person.confirmed ? '' : ' unconfirmed');
   card.dataset.personId = person.id;
 
-  const btn = document.createElement('button');
+  const btn = STATIC_MODE ? document.createElement('div') : document.createElement('button');
   btn.className = 'person-photo-btn';
-  btn.setAttribute('aria-label', `${person.confirmed ? 'Edit' : 'View'} ${person.full_name}`);
+  btn.setAttribute('aria-label', STATIC_MODE ? person.full_name : `${person.confirmed ? 'Edit' : 'View'} ${person.full_name}`);
 
   if (person.photo_id) {
     const img = document.createElement('img');
@@ -182,15 +198,17 @@ function buildCard(person) {
     btn.appendChild(buildAvatar(person.full_name));
   }
 
-  btn.addEventListener('click', () => {
-    if (!person.confirmed) {
-      openSimpleModal('unconfirmed-notice', el => {
-        el.querySelector('#unconfirmed-notice-name').textContent = person.full_name;
-      });
-      return;
-    }
-    openAuthModal(person, token => openEditModal(person, token));
-  });
+  if (!STATIC_MODE) {
+    btn.addEventListener('click', () => {
+      if (!person.confirmed) {
+        openSimpleModal('unconfirmed-notice', el => {
+          el.querySelector('#unconfirmed-notice-name').textContent = person.full_name;
+        });
+        return;
+      }
+      openAuthModal(person, token => openEditModal(person, token));
+    });
+  }
 
   card.appendChild(btn);
 
@@ -334,6 +352,8 @@ function getDescendants(primaryId, partnerId) {
 // ─── Edit modal ───────────────────────────────────────────────────────────────
 
 function openEditModal(person, token) {
+  document.getElementById('export-btn').hidden = false;
+
   if (!allowAdditions) {
     openSimpleModal('additions-disabled-notice');
     return;
