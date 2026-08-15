@@ -1,46 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
-    <title>KoSalli</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-            Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #ffffff;
-            color: #222;
-        }
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="../../css/main.css">
+    <link rel="shortcut icon" href="../../images/kosalli-icon.webp">
 
-        .container {
-            text-align: center;
-        }
+    <title>KoSalli — automatic, on-device spending tracker</title>
+    <meta name="title" content="KoSalli — automatic, on-device spending tracker">
+    <meta name="description" content="KoSalli turns your bank SMS alerts into a clear spending history, automatically, entirely on your device. No manual entry, no cloud.">
 
-        h1 {
-            font-size: 2.2rem;
-            margin-bottom: 1rem;
-        }
-
-        a {
-            font-size: 1rem;
-            color: #0066cc;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="KoSalli — automatic, on-device spending tracker">
+    <meta property="og:description" content="KoSalli turns your bank SMS alerts into a clear spending history, automatically, entirely on your device. No manual entry, no cloud.">
+    <meta property="og:image" content="../../images/kosalli-icon.webp">
 </head>
+
 <body>
-<div class="container">
-    <h1>KoSalli</h1>
-    <a href="privacy-policy.html">Privacy Policy</a>
-</div>
+    <!--
+    THESIS: A finance app earns trust the way a spec earns trust — by showing its mechanism, not claiming it.
+    OWN-WORLD: Same Release Notes system as the portfolio: near-black ground, phosphor-green accent, IBM Plex Mono/Sans, hairline-ruled spec sections, diff-style +/- marks.
+    STORY: A visitor deciding whether to install sees a real SMS parsed into a ledger row, reads the numbered feature spec and bank list, and trusts the on-device claim enough to tap Get on Google Play.
+    FIRST VIEWPORT: The parse itself — raw SMS text resolving into a structured ledger row, labeled as a synthetic example — directly under the heading.
+    FORM: Release Notes world, shared with index.html, concept-seed key e2bb6f18.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md.
+    -->
+    <nav class="site-nav">
+        <div class="nav-inner">
+            <a href="../../index.html" class="brand">
+                <img src="../../images/kosalli-icon.webp" alt="" class="brand-icon">
+                KoSalli
+            </a>
+            <div class="nav-links">
+                <a href="../../index.html#top">← Dinuka</a>
+                <a href="privacy-policy.html">Privacy Policy</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="app-hero">
+        <div class="app-hero-inner">
+            <h1>KoSalli</h1>
+            <p class="app-subtitle">
+                Turns your bank SMS alerts into a clear spending history — automatically, entirely on your
+                device. No manual entry. No account linking. No cloud.
+            </p>
+            <div class="app-cta">
+                <a href="https://play.google.com/store/apps/details?id=com.xdinuka.kosalli" target="_blank" rel="noopener" class="btn btn-primary">Get it on Google Play</a>
+                <a href="#spec" class="btn btn-ghost">Read the spec ↓</a>
+            </div>
+
+            <div class="parse-demo" data-reveal role="img" aria-label="A bank SMS message being parsed automatically into a structured spending entry — synthetic example">
+                <div class="parse-panel">
+                    <span class="parse-label">SMS received · synthetic example</span>
+                    <p class="parse-text"><span class="marker">−</span><span>"Your A/C **4521 debited LKR 3,450.00 at KEELLS SUPER on 12 AUG. Avl Bal LKR 82,140.55"</span></p>
+                </div>
+                <div class="parse-arrow" aria-hidden="true">→</div>
+                <div class="parse-panel">
+                    <span class="parse-label">Ledger entry</span>
+                    <div class="parse-row">
+                        <span class="marker">+</span>
+                        <div class="parse-fields">
+                            <span class="k">DATE</span><span class="v">12 Aug</span>
+                            <span class="k">MERCHANT</span><span class="v">Keells Super</span>
+                            <span class="k">CATEGORY</span><span class="v">Groceries</span>
+                            <span class="k">AMOUNT</span><span class="v">−LKR 3,450.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p class="parse-note">Captured instantly on-device. Nothing above ever leaves your phone.</p>
+        </div>
+    </section>
+
+    <section id="spec" class="section" data-reveal>
+        <h2 class="section-head">Spec</h2>
+        <div class="spec-list">
+            <div class="spec-item">
+                <span class="num">§01</span>
+                <div>
+                    <h3>Automatic transaction tracking</h3>
+                    <p>Every debit or purchase alert is captured instantly. KoSalli also reads your existing SMS inbox, so your full history is there from day one.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§02</span>
+                <div>
+                    <h3>Major Sri Lankan bank support</h3>
+                    <p>KoSalli understands SMS formats from eight major banks, covering both credit and debit cards.</p>
+                    <div class="bank-grid">
+                        <span class="bank-tag">DFCC Bank</span>
+                        <span class="bank-tag">Commercial Bank</span>
+                        <span class="bank-tag">Peoples Bank</span>
+                        <span class="bank-tag">BOC</span>
+                        <span class="bank-tag">HNB</span>
+                        <span class="bank-tag">Sampath Bank</span>
+                        <span class="bank-tag">Pan Asia Bank</span>
+                        <span class="bank-tag">NTB</span>
+                    </div>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§03</span>
+                <div>
+                    <h3>Smart auto-categorization</h3>
+                    <p>Set an exact rule ("KEELLS → Groceries") or a keyword rule ("PIZZA → Dining") and KoSalli applies it to every matching transaction — past and future. Ranked keyword rules keep you in control.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§04</span>
+                <div>
+                    <h3>Categories &amp; budgets</h3>
+                    <p>Set optional monthly and/or weekly spending limits per category, with a daily notification if you go over. Merge or delete categories freely — their transactions stay, just uncategorized.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§05</span>
+                <div>
+                    <h3>Bill tracking</h3>
+                    <p>Electricity, water, mobile, and credit card bills are picked up automatically from SMS, marked paid or unpaid, with a reminder a configurable number of days before each is due.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§06</span>
+                <div>
+                    <h3>Fuel Pass tracking</h3>
+                    <p>Built for Sri Lanka's National Fuel Pass system: see your weekly quota remaining per vehicle, whether today is your eligible fill-up day, and get a reminder before the week resets.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§07</span>
+                <div>
+                    <h3>Home screen at a glance</h3>
+                    <p>See today's and this month's spending the moment you open the app, with your full transaction list right there — search, filter, sort, and bulk-edit whenever you need to.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§08</span>
+                <div>
+                    <h3>Spending review</h3>
+                    <p>Break down your spending by category for any time period and see exactly where your money goes.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§09</span>
+                <div>
+                    <h3>Home screen widget</h3>
+                    <p>Add a resizable widget showing a single metric of your choice — total spending, a category's spending, budget remaining, or an account balance — for today, this week, or this month.</p>
+                </div>
+            </div>
+            <div class="spec-item">
+                <span class="num">§10</span>
+                <div>
+                    <h3>Scheduled spending summaries</h3>
+                    <p>Opt in to a daily, weekly, or monthly notification that delivers a spending summary on whatever day and time suits you.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section" data-reveal style="padding-top:0;">
+        <div class="trust">
+            <h2>Your data stays on your phone.</h2>
+            <p>
+                KoSalli works completely offline. All data is stored in a local database on your device and
+                never sent to any server — no third parties, no advertisers, no analytics.
+            </p>
+            <span class="tag accent trust-tag">Offline · On-device only</span>
+        </div>
+        <p style="margin-top:1.5rem;"><a href="privacy-policy.html" class="btn btn-ghost">Read the full privacy policy →</a></p>
+    </section>
+
+    <footer>
+        <p>
+            <a href="../../index.html">Dinuka Karunananda</a>
+            <a href="privacy-policy.html">Privacy Policy</a>
+        </p>
+        <p>&copy; 2026 Dinuka Karunananda. All rights reserved.</p>
+        <p class="eof">— EOF —</p>
+    </footer>
+
+    <script src="../../js/reveal.js" defer></script>
+    <script src="../../js/cursor.js" defer></script>
 </body>
+
 </html>
